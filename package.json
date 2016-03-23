@@ -1,0 +1,16 @@
+{
+  "name": "secdata",
+  "version": "1.0.0",
+  "description": "Harvest SEC data",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mongodb": "^2.1.10",
+    "request-promise": "^2.0.1"
+  }
+}
