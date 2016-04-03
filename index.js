@@ -1,6 +1,8 @@
 var MongoClient = require('mongodb').MongoClient,
-   secfetch = require('./secfetch'),
+   xbrlfetch = require('./xbrlfetch'),
    assert = require('assert');
+ 
+
 
 // Connection URL
 var url = 'mongodb://localhost:27017/myproject';
@@ -29,9 +31,10 @@ var insertDocuments = function(db, callback) {
   });
 }
 
-Promise.all([secfetch("APPL"), secfetch("GOOG"), secfetch("MSFT")])
-    .then(function (tickerDataResults) {
-        tickerDataResults.forEach(tData => console.log(JSON.stringify(tData, null, 2)));
+
+xbrlfetch.fetchLast10K("AMZN")
+    .then(function (filing) {
+        console.log(JSON.stringify(filing, null, 2));
     })
     .catch(function (err) {
         console.error(error);
