@@ -32,16 +32,31 @@ var insertDocuments = function(db, callback) {
 }
 
 Promise.all([
-            xbrlfetch.fetchLast10K("AAPL"), 
+            //xbrlfetch.fetchLast10K("AAPL"), 
             xbrlfetch.fetchLast10K("AMZN"), 
             //xbrlfetch.fetchLast10K("GOOG"), 
             xbrlfetch.fetchLast10K("MSFT")])
     .then(function (filing) {
         console.log(JSON.stringify(filing, null, 2));
+        console.log(`Name\t\t\t${filing[0].EntityRegistrantName}\t${filing[1].EntityRegistrantName}`);
+        console.log(`Revenues\t\t${filing[0].Revenues}\t${filing[1].Revenues}`);
+        console.log(`Gross Profit\t\t${filing[0].GrossProfit}\t${filing[1].GrossProfit}`);
+        console.log(`Operating Income\t${filing[0].OperatingIncomeLoss}\t${filing[1].OperatingIncomeLoss}`);
+        console.log(`Before Tax\t\t${filing[0].IncomeFromContinuingOperationsBeforeTax}\t${filing[1].IncomeFromContinuingOperationsBeforeTax}`);
+        console.log(`After Tax\t\t${filing[0].IncomeFromContinuingOperationsAfterTax}\t${filing[1].IncomeFromContinuingOperationsAfterTax}`);
+        console.log(`Net Income\t\t${filing[0].NetIncomeLoss}\t${filing[1].NetIncomeLoss}`);
     })
     .catch(function (err) {
         console.error(err);
     });
+    
+/*xbrlfetch.fetchLast10K("AMZN")
+   .then(function (filing) {
+        console.log(JSON.stringify(filing, null, 2));
+    })
+    .catch(function (err) {
+        console.error(err);
+    });*/
  
 /*
  xbrlfetch.fetchFilingsList("MSFT", "10-Q,10-K")
