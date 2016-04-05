@@ -31,11 +31,24 @@ var insertDocuments = function(db, callback) {
   });
 }
 
-
-xbrlfetch.fetchLast10K("AMZN")
+Promise.all([
+            xbrlfetch.fetchLast10K("AAPL"), 
+            xbrlfetch.fetchLast10K("AMZN"), 
+            //xbrlfetch.fetchLast10K("GOOG"), 
+            xbrlfetch.fetchLast10K("MSFT")])
     .then(function (filing) {
         console.log(JSON.stringify(filing, null, 2));
     })
     .catch(function (err) {
-        console.error(error);
+        console.error(err);
     });
+ 
+/*
+ xbrlfetch.fetchFilingsList("MSFT", "10-Q,10-K")
+    .then(function (filing) {
+        console.log(JSON.stringify(filing, null, 2));
+    })
+    .catch(function (err) {
+        console.error(err);
+    });
+*/

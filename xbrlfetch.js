@@ -1,5 +1,5 @@
 var request = require('request'),
-rp = require('request-promise'),
+   moment = require('moment'),
    xml2js = require('xml2js'),
    unzip = require('unzip'),
    ParseXbrl = require('parse-xbrl'),
@@ -21,17 +21,16 @@ rp = require('request-promise'),
 
 /**
  * @param  {any} ticker
- * @param  {any} indicator
  */
 function fetchLast10K(ticker) {
-   return fetchFilingsList(ticker).then(function(listInfo) {
+   return fetchFilingsList(ticker, "10-K", 0, 1).then(function(info) {
       // we have a list of filings now
-      var filing10K = listInfo.companyFilings.results[0].filing.find(function(filing) {
-         return filing.type[0] == "10-K";
+      var filing10K = info.filings.find(function(filing) {
+         return filing.type == "10-K";
       });
       
       if(filing10K) {
-         var xbrlURL = filing10K.filingHREF[0].replace('index.htm', 'xbrl.zip');
+         var xbrlURL = filing10K.filingHREF.replace('index.htm', 'xbrl.zip');
          return fetchAndParseXBRL(xbrlURL);
       };
       
@@ -40,10 +39,10 @@ function fetchLast10K(ticker) {
 }
 
 function fetchFilings(ticker) {
-   return fetchFilingsList(ticker).then(function(listInfo) {
+   return fetchFilingsList(ticker).then(function(info) {
       // we have a list of filings now
-      var promises = listInfo.companyFilings.results[0].filing.filter(function(filing) {
-         return filing.type[0] == "10-Q" || filing.type[0] == "10-K";
+      var promises = Info.filings.filter(function(filing) {
+         return filing.type == "10-Q" || filing.type == "10-K";
       }).map((filing, index) => {
          var xbrlURL = filing.filingHREF[0].replace('index.htm', 'xbrl.zip');
          return fetchAndParseXBRL(xbrlURL);
@@ -80,25 +79,113 @@ function fetchAndParseXBRL(xbrlURL) {
 }
 
 /**
- * @param  {any} ticker
+ * @param  {string} ticker
+ * @param  {number} start=0
+ * @param  {number} count=100
+ * @param  {Date} priorTo=null
+ * @param  {string} filingType=null
  */
-function fetchFilingsList(ticker) {
-   return rp({
-      uri: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ticker}&count=100&output=xml`,
-      headers: {
-         'User-Agent': 'Request-Promise',
-         'Accept': 'application/xml'
+function fetchFilingsList(ticker, filingType, start, count, priorTo) {
+   
+   start = start || 0;
+   count = count || 100;
+   
+   var uri = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ticker}&start=${start}&count=${count}&output=xml`;
+   
+   if (priorTo && priorTo instanceof Date && !isNaN(priorTo.valueOf())) {
+      var date = moment(priorTo).format('YYYYMMDD')
+      uri += `&dateb=${date}`;
+   }
+   
+   if (filingType ) {
+      if(filingType.indexOf(',') > 0) {
+         return Promise.all(filingType.split(',').map(type => {
+            return fetchFilingsList(ticker, type, start, count, priorTo);
+         })).then(typesData => {
+            return {
+               companyInfo: typesData[0].companyInfo,
+               filings: typesData.reduce((prev, curr, currIdx) => {
+                     return prev.concat(curr.filings);
+                  }, []).sort((a, b) => {
+                     return moment(b.dateFiled).diff(moment(a.dateFiled)); 
+                  })
+            }
+         });
+      } else {
+         uri += `&type=${filingType}`;
       }
-   }).then(function(resp) {
-      return new Promise(function(resolve, reject) {
-         parser.parseString(resp, function (err, result) {
-            if (err) reject(err);
-            resolve(result);
+   }
+   
+   return fetchFilingsRaw(uri);
+}
+
+function fetchFilingsRaw(uri) {
+   return new Promise(function(resolve, reject) {
+      var r = request({
+         uri: uri,
+         headers: {
+            'User-Agent': 'Request-Promise',
+            'Accept': 'application/xml'
+         },
+         gzip: true
+      }, (error, response, body) => {
+         if(error) {
+            reject(error);
+            return;
+         }
+         
+         if(response.headers['content-type'] === 'text/html') {
+            reject("No matching Ticker Symbol.")
+            return;
+         }
+         
+         parser.parseString(body, function (err, result) {
+            if (err) {
+               reject(err);
+               return;
+            }
+            
+            var data = {
+               companyInfo: {
+                  CIK: result.companyFilings.companyInfo[0].CIK[0],
+                  CIKHREF: result.companyFilings.companyInfo[0].CIKHREF[0],
+                  Location: result.companyFilings.companyInfo[0].Location[0],
+                  SIC: result.companyFilings.companyInfo[0].SIC[0],
+                  SICDescription: result.companyFilings.companyInfo[0].SICDescription[0],
+                  SICHREF: result.companyFilings.companyInfo[0].SICHREF[0],
+                  businessAddress: {
+                     city: result.companyFilings.companyInfo[0].businessAddress[0].city[0],
+                     phoneNumber: result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber[0],
+                     state: result.companyFilings.companyInfo[0].businessAddress[0].state[0],
+                     street: result.companyFilings.companyInfo[0].businessAddress[0].street[0],
+                     zipCode: result.companyFilings.companyInfo[0].businessAddress[0].zipCode[0],
+                  },
+                  mailingAddress: {
+                     city: result.companyFilings.companyInfo[0].mailingAddress[0].city[0],
+                     state: result.companyFilings.companyInfo[0].mailingAddress[0].state[0],
+                     street: result.companyFilings.companyInfo[0].mailingAddress[0].street[0],
+                     zipCode: result.companyFilings.companyInfo[0].mailingAddress[0].zipCode[0],
+                  },
+                  fiscalYearEnd: result.companyFilings.companyInfo[0].fiscalYearEnd[0],
+                  name: result.companyFilings.companyInfo[0].name[0],
+                  stateOfIncorporation: result.companyFilings.companyInfo[0].stateOfIncorporation[0],
+               },
+               filings: result.companyFilings.results[0].filing.map(val => {
+                  return {
+                     dateFiled: val.dateFiled[0],
+                     filingHREF: val.filingHREF[0],
+                     formName: val.formName[0],
+                     type: val.type[0]
+                  };
+               })
+               
+            };
+            
+            resolve(data);
          });
       });
    });
 }
-
 
 module.exports = {
    fetchFilings: fetchFilings,
