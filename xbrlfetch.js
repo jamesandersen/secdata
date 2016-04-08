@@ -1,4 +1,5 @@
 var request = require('request'),
+   csv = require('csv-stream'),
    moment = require('moment'),
    xml2js = require('xml2js'),
    unzip = require('unzip'),
@@ -187,7 +188,46 @@ function fetchFilingsRaw(uri) {
    });
 }
 
+function fetchExchangeSymbols(exchange) {
+   return new Promise(function(resolve, reject) {
+      // All of these arguments are optional. 
+      var symbolData = [];
+   
+      request(`http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=${exchange}&render=download`)
+      .pipe(csv.createStream({
+            endLine : '\n', // default is \n, 
+            escapeChar : '"', // default is an empty string 
+            enclosedChar : '"' // default is an empty string 
+         }))
+         .on('error',function(err){
+            reject(err);
+         })
+         .on('data',function(data){
+            // outputs an object containing a set of key/value pair representing a line found in the csv file. 
+            delete data[''];
+            if(data['ADR TSO'] !== 'n/a') {
+               data['ADR_TSO'] = data['ADR TSO'];
+            }
+            data.SymbolHREF = data['Summary Quote'];
+            data.MarketCap = parseFloat(data.MarketCap);
+            data.LastSale = parseFloat(data.LastSale);
+            data.IPOyear = parseInt(data.IPOyear);
+            if(isNaN(data.IPOyear)) delete data.IPOyear;
+            delete data['Summary Quote'];
+            delete data['ADR TSO'];
+            data.exchange = exchange;
+            console.log(data);
+            symbolData.push(data);
+         })
+         .on('end', function(){
+               resolve(symbolData);
+         });
+   });
+}
+
 module.exports = {
+   fetchNYSESymbols: () => fetchExchangeSymbols('NYSE'),
+   fetchNASDAQSymbols: () => fetchExchangeSymbols('NASDAQ'),
    fetchFilings: fetchFilings,
    fetchFilingsList: fetchFilingsList,
    fetchLast10K: fetchLast10K

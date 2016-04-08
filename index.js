@@ -3,7 +3,7 @@ var MongoClient = require('mongodb').MongoClient,
    assert = require('assert');
  
 
-
+/*
 // Connection URL
 var url = 'mongodb://localhost:27017/myproject';
 // Use connect method to connect to the Server
@@ -15,8 +15,9 @@ MongoClient.connect(url, function(err, db) {
     db.close();
   });
 });
+*/
 
-var insertDocuments = function(db, callback) {
+function insertDocuments(db, callback) {
   // Get the documents collection
   var collection = db.collection('documents');
   // Insert some documents
@@ -31,11 +32,13 @@ var insertDocuments = function(db, callback) {
   });
 }
 
+// http://stackoverflow.com/questions/25338608/download-all-stock-symbol-list-of-a-market
+/*
 Promise.all([
-            //xbrlfetch.fetchLast10K("AAPL"), 
-            xbrlfetch.fetchLast10K("AMZN"), 
-            //xbrlfetch.fetchLast10K("GOOG"), 
-            xbrlfetch.fetchLast10K("MSFT")])
+      xbrlfetch.fetchLast10K("AAPL"), 
+      //xbrlfetch.fetchLast10K("AMZN"), 
+      //xbrlfetch.fetchLast10K("GOOG"), 
+      xbrlfetch.fetchLast10K("MSFT")])
     .then(function (filing) {
         console.log(JSON.stringify(filing, null, 2));
         console.log(`Name\t\t\t${filing[0].EntityRegistrantName}\t${filing[1].EntityRegistrantName}`);
@@ -49,6 +52,7 @@ Promise.all([
     .catch(function (err) {
         console.error(err);
     });
+    */
     
 /*xbrlfetch.fetchLast10K("AMZN")
    .then(function (filing) {
@@ -67,3 +71,11 @@ Promise.all([
         console.error(err);
     });
 */
+
+xbrlfetch.fetchNYSESymbols()
+   .then(function(symbolData) {
+      console.log(`successfully got NASDAQ ${symbolData.length} symbols`);
+   })
+   .catch(function() {
+      console.error('failed to get NASDAQ symbols');
+   });
