@@ -54,10 +54,8 @@ function fetchFilings(ticker) {
 }
 
 function fetchAndParseXBRL(xbrlURL) {
-   
    return new Promise(function(resolve, reject) {
       var r = request(xbrlURL);
-
       r.on('response',  function (res) {
          res.pipe(unzip.Parse())
          .on('entry', function (entry) {
@@ -65,11 +63,8 @@ function fetchAndParseXBRL(xbrlURL) {
             var type = entry.type; // 'Directory' or 'File'
             var size = entry.size;
             if (/\d\.xml/.test(fileName)) {
-               entry.pipe(fs.createWriteStream('./test/download/' + fileName))
-               .on('finish', function(fd) {
-                  ParseXbrl.parse('./test/download/' + fileName).then(function(parsedDoc) {
-                     resolve(parsedDoc);
-                  });
+               ParseXbrl.parse(entry).then(function(parsedDoc) {
+                  resolve(parsedDoc);
                });
             } else {
                entry.autodrain();
@@ -156,7 +151,7 @@ function fetchFilingsRaw(uri) {
                   SICHREF: result.companyFilings.companyInfo[0].SICHREF[0],
                   businessAddress: {
                      city: result.companyFilings.companyInfo[0].businessAddress[0].city[0],
-                     phoneNumber: result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber[0],
+                     phoneNumber: result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber ? result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber[0] : null,
                      state: result.companyFilings.companyInfo[0].businessAddress[0].state[0],
                      street: result.companyFilings.companyInfo[0].businessAddress[0].street[0],
                      zipCode: result.companyFilings.companyInfo[0].businessAddress[0].zipCode[0],
@@ -167,18 +162,18 @@ function fetchFilingsRaw(uri) {
                      street: result.companyFilings.companyInfo[0].mailingAddress[0].street[0],
                      zipCode: result.companyFilings.companyInfo[0].mailingAddress[0].zipCode[0],
                   },
-                  fiscalYearEnd: result.companyFilings.companyInfo[0].fiscalYearEnd[0],
+                  fiscalYearEnd: result.companyFilings.companyInfo[0].fiscalYearEnd ? result.companyFilings.companyInfo[0].fiscalYearEnd[0] : null,
                   name: result.companyFilings.companyInfo[0].name[0],
-                  stateOfIncorporation: result.companyFilings.companyInfo[0].stateOfIncorporation[0],
+                  stateOfIncorporation: result.companyFilings.companyInfo[0].stateOfIncorporation ? result.companyFilings.companyInfo[0].stateOfIncorporation[0] : null,
                },
-               filings: result.companyFilings.results[0].filing.map(val => {
+               filings: result.companyFilings.results ? result.companyFilings.results[0].filing.map(val => {
                   return {
                      dateFiled: val.dateFiled[0],
                      filingHREF: val.filingHREF[0],
                      formName: val.formName[0],
                      type: val.type[0]
                   };
-               })
+               }) : []
                
             };
             
@@ -216,7 +211,8 @@ function fetchExchangeSymbols(exchange) {
             delete data['Summary Quote'];
             delete data['ADR TSO'];
             data.exchange = exchange;
-            console.log(data);
+            //console.log(data);
+            data.asOf = new Date().toISOString();
             symbolData.push(data);
          })
          .on('end', function(){
