@@ -3,6 +3,7 @@ var request = require('request'),
    moment = require('moment'),
    xml2js = require('xml2js'),
    unzip = require('unzip'),
+   _get = require('lodash.get'),
    ParseXbrl = require('parse-xbrl'),
    fs = require('fs'),
    parser = new xml2js.Parser();;
@@ -143,35 +144,35 @@ function fetchFilingsRaw(uri) {
             
             var data = {
                companyInfo: {
-                  CIK: result.companyFilings.companyInfo[0].CIK[0],
-                  CIKHREF: result.companyFilings.companyInfo[0].CIKHREF[0],
-                  Location: result.companyFilings.companyInfo[0].Location[0],
-                  SIC: result.companyFilings.companyInfo[0].SIC[0],
-                  SICDescription: result.companyFilings.companyInfo[0].SICDescription[0],
-                  SICHREF: result.companyFilings.companyInfo[0].SICHREF[0],
+                  CIK: _get(result, 'companyFilings.companyInfo[0].CIK[0]', null),
+                  CIKHREF: _get(result, 'companyFilings.companyInfo[0].CIKHREF[0]', null),
+                  Location: _get(result, 'companyFilings.companyInfo[0].Location[0]', null),
+                  SIC: _get(result, 'companyFilings.companyInfo[0].SIC[0]', null),
+                  SICDescription: _get(result, 'companyFilings.companyInfo[0].SICDescription[0]', null),
+                  SICHREF: _get(result, 'companyFilings.companyInfo[0].SICHREF[0]', null),
                   businessAddress: {
-                     city: result.companyFilings.companyInfo[0].businessAddress[0].city[0],
-                     phoneNumber: result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber ? result.companyFilings.companyInfo[0].businessAddress[0].phoneNumber[0] : null,
-                     state: result.companyFilings.companyInfo[0].businessAddress[0].state[0],
-                     street: result.companyFilings.companyInfo[0].businessAddress[0].street[0],
-                     zipCode: result.companyFilings.companyInfo[0].businessAddress[0].zipCode[0],
+                     city: _get(result, 'companyFilings.companyInfo[0].businessAddress[0].city[0]', null),
+                     phoneNumber: _get(result, 'companyFilings.companyInfo[0].businessAddress[0].phoneNumber[0]', null),
+                     state: _get(result, 'companyFilings.companyInfo[0].businessAddress[0].state[0]', null),
+                     street: _get(result, 'companyFilings.companyInfo[0].businessAddress[0].street[0]', null),
+                     zipCode: _get(result, 'companyFilings.companyInfo[0].businessAddress[0].zipCode[0]', null)
                   },
                   mailingAddress: {
-                     city: result.companyFilings.companyInfo[0].mailingAddress[0].city[0],
-                     state: result.companyFilings.companyInfo[0].mailingAddress[0].state[0],
-                     street: result.companyFilings.companyInfo[0].mailingAddress[0].street[0],
-                     zipCode: result.companyFilings.companyInfo[0].mailingAddress[0].zipCode[0],
+                     city: _get(result, 'companyFilings.companyInfo[0].mailingAddress[0].city[0]', null),
+                     state: _get(result, 'companyFilings.companyInfo[0].mailingAddress[0].state[0]', null),
+                     street: _get(result, 'companyFilings.companyInfo[0].mailingAddress[0].street[0]', null),
+                     zipCode: _get(result, 'companyFilings.companyInfo[0].mailingAddress[0].zipCode[0]', null)
                   },
-                  fiscalYearEnd: result.companyFilings.companyInfo[0].fiscalYearEnd ? result.companyFilings.companyInfo[0].fiscalYearEnd[0] : null,
-                  name: result.companyFilings.companyInfo[0].name[0],
-                  stateOfIncorporation: result.companyFilings.companyInfo[0].stateOfIncorporation ? result.companyFilings.companyInfo[0].stateOfIncorporation[0] : null,
+                  fiscalYearEnd: _get(result, 'companyFilings.companyInfo[0].fiscalYearEnd[0]', null),
+                  name: _get(result, 'companyFilings.companyInfo[0].name[0]', null),
+                  stateOfIncorporation: _get(result, 'companyFilings.companyInfo[0].stateOfIncorporation[0]', null),
                },
                filings: result.companyFilings.results ? result.companyFilings.results[0].filing.map(val => {
                   return {
-                     dateFiled: val.dateFiled[0],
-                     filingHREF: val.filingHREF[0],
-                     formName: val.formName[0],
-                     type: val.type[0]
+                     dateFiled: _get(val, 'dateFiled[0]', null),
+                     filingHREF: _get(val, 'filingHREF[0]', null),
+                     formName: _get(val, 'formName[0]', null),
+                     type: _get(val, 'type[0]', null)
                   };
                }) : []
                
