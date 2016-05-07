@@ -4,53 +4,79 @@ var MongoClient = require('mongodb').MongoClient,
    assert = require('assert');
 
 
-co(function*() {
-  // Connection URL
-  var db = yield MongoClient.connect('mongodb://localhost:27017/secdata');
-  console.log("Connected correctly to server");
+function populateSymbols() {
+    co(function*() {
+        // Connection URL
+        var db = yield MongoClient.connect('mongodb://localhost:27017/secdata');
+        console.log("Connected correctly to server");
 
-  // Get the symbols collection
-  var symbolsCol = db.collection('symbols');
-  
-  var dropResult = yield symbolsCol.drop();
-  
-  var nyseSymbols = yield xbrlfetch.fetchNYSESymbols();
-  console.log(`successfully got ${nyseSymbols.length}  NYSE symbols`);
-  var insertResult = yield symbolsCol.insertMany(nyseSymbols);
-  assert.equal(nyseSymbols.length, insertResult.result.n);
-  assert.equal(nyseSymbols.length, insertResult.ops.length);
-  console.log(`Inserted ${insertResult.result.n} documents into the symbols collection`);
-  
-  var nasdaqSymbols = yield xbrlfetch.fetchNASDAQSymbols();
-  console.log(`successfully got ${nasdaqSymbols.length}  NASDAQ symbols`);
-  insertResult = yield symbolsCol.insertMany(nasdaqSymbols);
-  assert.equal(nasdaqSymbols.length, insertResult.result.n);
-  assert.equal(nasdaqSymbols.length, insertResult.ops.length);
-  console.log(`Inserted ${insertResult.result.n} documents into the symbols collection`);
-  
-  var filingsCol = db.collection("filings");
-  var tickers = yield symbolsCol.find({}).skip(0).limit(100).project({ _id: 0, Symbol: 1}).toArray();
-  tickers = tickers.map(t => t.Symbol);
-  console.log(`Found ${tickers.length} symbols`);
-  for(var i = 0; i < tickers.length; i++) {
-      
-      var deleteResult = yield filingsCol.deleteMany({ "TradingSymbol": tickers[i]});
-      try {
-          var filing = yield xbrlfetch.fetchLast10K(tickers[i]);
-          // turn symbols into an array
-          filing.TradingSymbol = filing.TradingSymbol.split(', ')
-          var insertResult = yield filingsCol.insert(filing);
-          console.log(`Inserted last 10K filing for ${tickers[i]} - ${filing.EntityRegistrantName}`);
-      } catch (err) {
-          console.error(`Error getting 10K for ${tickers[i]}: ${err}`);
-      }
-      
-  }
-  
-  db.close();
-}).catch(function(err) {
-  console.log(err.stack);
-});
+        // Get the symbols collection
+        var symbolsCol = db.collection('symbols');
+        
+        try {
+            var dropResult = yield symbolsCol.drop();
+        } catch(err) {
+            console.warn('Error dropping symbols collection: ' + err);
+        }
+        
+        var symbols = yield Promise.all([xbrlfetch.fetchNYSESymbols(), xbrlfetch.fetchNASDAQSymbols()]).then(results => results[0].concat(results[1]));
+        for(var i = 0; i < symbols.length; i++) {
+            try {
+                symbols[i].lastFilingFetch = new Date().toISOString();
+                var filingList = yield xbrlfetch.fetchFilingsList(symbols[i].Symbol, "10-K,10-Q");
+                symbols[i].companyInfo = filingList.companyInfo;
+                symbols[i].filings = filingList.filings;
+                console.log(`Fetched filing list for ${symbols[i].Symbol}: ${symbols[i].filings.length} filings fetched\t${i} of ${symbols.length} filings`);
+            } catch (err) {
+                console.warn(`Failed to fetch filing list for ${symbols[i].Symbol}: ${err}`);
+                symbols[i].filingFetchError = err.toString();
+            }
+        }
+        
+        var insertResult = yield symbolsCol.insertMany(symbols);
+        assert.equal(symbols.length, insertResult.result.n);
+        assert.equal(symbols.length, insertResult.ops.length);
+        console.log(`Inserted ${insertResult.result.n} documents into the symbols collection`);
+        
+        db.close();
+    }).catch(function(err) {
+        console.error(`${err}: ${err.stack}`);
+    });
+}
+
+function populateFilings() {
+    co(function*() {
+        // Connection URL
+        var db = yield MongoClient.connect('mongodb://localhost:27017/secdata');
+        console.log("Connected correctly to server");
+
+        // Get the symbols collection
+        var symbolsCol = db.collection('symbols');
+        
+        var filingsCol = db.collection("filings");
+        var tickers = yield symbolsCol.find({}).skip(0).limit(100).project({ _id: 0, Symbol: 1}).toArray();
+        tickers = tickers.map(t => t.Symbol);
+        console.log(`Found ${tickers.length} symbols`);
+        for(var i = 0; i < tickers.length; i++) {
+            
+            var deleteResult = yield filingsCol.deleteMany({ "TradingSymbol": tickers[i]});
+            try {
+                var filing = yield xbrlfetch.fetchLast10K(tickers[i]);
+                // turn symbols into an array
+                filing.TradingSymbol = filing.TradingSymbol.split(', ')
+                var insertResult = yield filingsCol.insert(filing);
+                console.log(`Inserted last 10K filing for ${tickers[i]} - ${filing.EntityRegistrantName}`);
+            } catch (err) {
+                console.error(`Error getting 10K for ${tickers[i]}: ${err}`);
+            }
+        }
+        
+        db.close();
+    }).catch(function(err) {
+        console.log(err.stack);
+    });
+}
+
 
 
 // http://stackoverflow.com/questions/25338608/download-all-stock-symbol-list-of-a-market
@@ -82,7 +108,7 @@ Promise.all([
     });*/
     
     
-xbrlfetch.fetchLast10K("GOOGL")
+xbrlfetch.fetchLast10K("ASX")
    .then(function (filing) {
         console.log(JSON.stringify(filing, null, 2));
     })
@@ -90,6 +116,7 @@ xbrlfetch.fetchLast10K("GOOGL")
         console.error(err);
     });
  
+populateSymbols();
 /*
  xbrlfetch.fetchFilingsList("MSFT", "10-Q,10-K")
     .then(function (filing) {
