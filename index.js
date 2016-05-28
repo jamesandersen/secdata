@@ -13,13 +13,22 @@ function populateSymbols() {
         // Get the symbols collection
         var symbolsCol = db.collection('symbols');
         
+        
         try {
-            var dropResult = yield symbolsCol.drop();
+            //var dropResult = yield symbolsCol.drop();
         } catch(err) {
             console.warn('Error dropping symbols collection: ' + err);
         }
         
-        var symbols = yield Promise.all([xbrlfetch.fetchNYSESymbols(), xbrlfetch.fetchNASDAQSymbols()]).then(results => results[0].concat(results[1]));
+        var existingSymbols = yield symbolsCol.find({}).project({ Symbol: 1}).toArray();
+        var symbols = yield Promise.all([xbrlfetch.fetchNYSESymbols(), xbrlfetch.fetchNASDAQSymbols()])
+                                .then(results => results[0].concat(results[1]));
+        var symbolsCount = symbols.length;
+        symbols = symbols.filter(sym => !existingSymbols.find(existing => existing.Symbol == sym.Symbol));
+        console.log(`${existingSymbols.length} of ${symbolsCount} total symbols have already been saved.  Will proceed with ${symbols.length} remaining symbols...`);
+                             
+        var symbolsToSave = [];
+        var saveIncrement = 20;
         for(var i = 0; i < symbols.length; i++) {
             try {
                 symbols[i].lastFilingFetch = new Date().toISOString();
@@ -31,12 +40,16 @@ function populateSymbols() {
                 console.warn(`Failed to fetch filing list for ${symbols[i].Symbol}: ${err}`);
                 symbols[i].filingFetchError = err.toString();
             }
+            
+            symbolsToSave.push(symbols[i]);
+            if(symbolsToSave.length % saveIncrement === 0 || i == symbols.length - 1) {
+                var insertResult = yield symbolsCol.insertMany(symbolsToSave);
+                assert.equal(symbolsToSave.length, insertResult.result.n);
+                assert.equal(symbolsToSave.length, insertResult.ops.length);
+                console.log(`Inserted ${insertResult.result.n} documents into the symbols collection`);
+                symbolsToSave = [];
+            }
         }
-        
-        var insertResult = yield symbolsCol.insertMany(symbols);
-        assert.equal(symbols.length, insertResult.result.n);
-        assert.equal(symbols.length, insertResult.ops.length);
-        console.log(`Inserted ${insertResult.result.n} documents into the symbols collection`);
         
         db.close();
     }).catch(function(err) {
