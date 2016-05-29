@@ -2,7 +2,7 @@ var request = require('request'),
    csv = require('csv-stream'),
    moment = require('moment'),
    xml2js = require('xml2js'),
-   unzip = require('unzip'),
+   yauzl = require('yauzl'),
    _get = require('lodash.get'),
    ParseXbrl = require('parse-xbrl'),
    fs = require('fs'),
@@ -56,21 +56,38 @@ function fetchFilings(ticker) {
 
 function fetchAndParseXBRL(xbrlURL) {
    return new Promise(function(resolve, reject) {
-      var r = request(xbrlURL);
-      r.on('response',  function (res) {
-         res.pipe(unzip.Parse())
-         .on('entry', function (entry) {
-            var fileName = entry.path;
-            var type = entry.type; // 'Directory' or 'File'
-            var size = entry.size;
-            if (/\d\.xml/.test(fileName)) {
-               ParseXbrl.parse(entry).then(function(parsedDoc) {
-                  resolve(parsedDoc);
-               });
+         // compressed data as it is received
+      var r = request({ method: 'GET'
+            , uri: xbrlURL
+            , encoding: null
+            , gzip: true
+      }, (err, response, body) => {
+            if (!err && response.statusCode == 200) {
+                  yauzl.fromBuffer(body, 'xbrl', (err, zipfile) => {
+                        if (err) { reject(err); return; }
+                        zipfile.on("entry", function(entry) {
+                              if (/\d\.xml/.test(entry.fileName)) {
+                                    // file entry 
+                                    zipfile.openReadStream(entry, function(err, readStream) {
+                                          if (err) { reject(err); return; }
+                                          // ensure parent directory exists 
+                                          var filepath = "/tmp/" + entry.fileName;
+                                          readStream.pipe(fs.createWriteStream(filepath));
+                                          readStream.on("end", function() {
+                                                ParseXbrl.parse(filepath).then(function(parsedDoc) {
+                                                      fs.unlink(filepath, function(err) {
+                                                            if (err) { reject(err); return; }
+                                                            resolve(parsedDoc);
+                                                      });
+                                                });
+                                          });
+                                    });
+                              }
+                        });
+                  });
             } else {
-               entry.autodrain();
+                  reject(`Failed to download ${xbrlURL}; response status code: ${response.statusCode}`);
             }
-         });
       });
    });
 }
@@ -227,5 +244,6 @@ module.exports = {
    fetchNASDAQSymbols: () => fetchExchangeSymbols('NASDAQ'),
    fetchFilings: fetchFilings,
    fetchFilingsList: fetchFilingsList,
-   fetchLast10K: fetchLast10K
+   fetchLast10K: fetchLast10K,
+   fetchAndParseXBRL: fetchAndParseXBRL
 };

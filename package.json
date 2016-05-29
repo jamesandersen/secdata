@@ -15,7 +15,7 @@
     "mongodb": "^2.1.10",
     "parse-xbrl": "file:../parse-xbrl",
     "request": "^2.69.0",
-    "unzip": "^0.1.11",
+    "yauzl": "^2.4.2",
     "xml2js": "^0.4.16",
     "lodash.get": "4.2.1",
     "co": "4.6.0"

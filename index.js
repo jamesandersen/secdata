@@ -67,21 +67,35 @@ function populateFilings() {
         var symbolsCol = db.collection('symbols');
         
         var filingsCol = db.collection("filings");
-        var tickers = yield symbolsCol.find({}).skip(0).limit(100).project({ _id: 0, Symbol: 1}).toArray();
-        tickers = tickers.map(t => t.Symbol);
-        console.log(`Found ${tickers.length} symbols`);
+        var existingFilings = yield filingsCol.distinct('TradingSymbol');
+        var tickers = yield symbolsCol.find({ filings: { $not: { $size: 0}}})
+                            .skip(0)
+                            .limit(3)
+                            .project({ _id: 0, Symbol: 1, filings: 1}).toArray();
+        tickers = tickers.filter(t => !existingFilings.find(ef => ef == t.Symbol));
+        
+        console.log(`Found ${tickers.length} symbols that need filings`);
         for(var i = 0; i < tickers.length; i++) {
             
             var deleteResult = yield filingsCol.deleteMany({ "TradingSymbol": tickers[i]});
-            try {
-                var filing = yield xbrlfetch.fetchLast10K(tickers[i]);
-                // turn symbols into an array
-                filing.TradingSymbol = filing.TradingSymbol.split(', ')
-                var insertResult = yield filingsCol.insert(filing);
-                console.log(`Inserted last 10K filing for ${tickers[i]} - ${filing.EntityRegistrantName}`);
-            } catch (err) {
-                console.error(`Error getting 10K for ${tickers[i]}: ${err}`);
+            var filingData = [];
+            for(var j = 0; j < tickers[i].filings.length; j++) {
+                if (tickers[i].filings[j].type == "10-Q" || tickers[i].filings[j].type == "10-K") {
+                    var xbrlURL = tickers[i].filings[j].filingHREF.replace(/index\.html?/, 'xbrl.zip');
+                    try {
+                        var filing = yield xbrlfetch.fetchAndParseXBRL(xbrlURL);
+                        // turn symbols into an array
+                        filing.TradingSymbol = filing.TradingSymbol.split(', ');
+                        filingData.push(filing);
+                    } catch (err) {
+                        console.error(`Error getting ${tickers[i].filings[j].type} for ${tickers[i].Symbol} from ${xbrlURL}: ${err}`);
+                    }
+                }
             }
+            
+            var insertResult = yield filingsCol.insertMany(filingData);
+            assert.equal(filingData.length, insertResult.result.n);
+            console.log(`Inserted ${insertResult.result.n} filings for ${tickers[i].Symbol} - ${filing.EntityRegistrantName}`);
         }
         
         db.close();
@@ -121,21 +135,13 @@ Promise.all([
     });*/
     
     
-xbrlfetch.fetchLast10K("ASX")
+/*xbrlfetch.fetchLast10K("ASX")
    .then(function (filing) {
         console.log(JSON.stringify(filing, null, 2));
     })
     .catch(function (err) {
         console.error(err);
-    });
+    });*/
  
-populateSymbols();
-/*
- xbrlfetch.fetchFilingsList("MSFT", "10-Q,10-K")
-    .then(function (filing) {
-        console.log(JSON.stringify(filing, null, 2));
-    })
-    .catch(function (err) {
-        console.error(err);
-    });
-*/
+//populateSymbols();
+populateFilings();
