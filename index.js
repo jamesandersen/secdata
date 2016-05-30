@@ -68,34 +68,55 @@ function populateFilings() {
         
         var filingsCol = db.collection("filings");
         var existingFilings = yield filingsCol.distinct('TradingSymbol');
-        var tickers = yield symbolsCol.find({ filings: { $not: { $size: 0}}})
+        var tickers = yield symbolsCol.find(
+            { $and: [ 
+                { filings: { $exists: true } }, 
+                { filings: { $not: { $size: 0} } }, 
+                { lastFilingDataFetchDate: null }
+                ]})
                             .skip(0)
-                            .limit(3)
+                            .limit(100)
                             .project({ _id: 0, Symbol: 1, filings: 1}).toArray();
-        tickers = tickers.filter(t => !existingFilings.find(ef => ef == t.Symbol));
+        tickers = tickers.filter(t => !existingFilings.find(ef => ef.toLowerCase() == t.Symbol.toLowerCase()));
         
         console.log(`Found ${tickers.length} symbols that need filings`);
         for(var i = 0; i < tickers.length; i++) {
             
-            var deleteResult = yield filingsCol.deleteMany({ "TradingSymbol": tickers[i]});
+            var deleteResult = yield filingsCol.deleteMany({ "TradingSymbol": tickers[i].Symbol});
             var filingData = [];
+            var now = new Date();
             for(var j = 0; j < tickers[i].filings.length; j++) {
-                if (tickers[i].filings[j].type == "10-Q" || tickers[i].filings[j].type == "10-K") {
+                var filingDate = new Date();
+                filingDate.setTime(Date.parse(tickers[i].filings[j].dateFiled));
+                var age = (now - filingDate) / (1000 * 60 * 60 * 24 * 365);
+                if (age <= 3 && (tickers[i].filings[j].type == "10-Q" || tickers[i].filings[j].type == "10-K")) {
                     var xbrlURL = tickers[i].filings[j].filingHREF.replace(/index\.html?/, 'xbrl.zip');
                     try {
                         var filing = yield xbrlfetch.fetchAndParseXBRL(xbrlURL);
-                        // turn symbols into an array
-                        filing.TradingSymbol = filing.TradingSymbol.split(', ');
+                        
+                        // capture some useful additional data
+                        filing.TradingSymbol = tickers[i].Symbol;
+                        filing.htmlURL = tickers[i].filings[j].filingHREF;
+                        filing.zipURL = xbrlURL;
+                        filing.dateFiled = filingDate;
+                        
                         filingData.push(filing);
                     } catch (err) {
-                        console.error(`Error getting ${tickers[i].filings[j].type} for ${tickers[i].Symbol} from ${xbrlURL}: ${err}`);
+                        console.error(`Error getting ${tickers[i].filings[j].type} for ${tickers[i].Symbol} 
+                        filed on ${tickers[i].filings[j].dateFiled} from ${xbrlURL}:
+                         ${err}`);
                     }
                 }
             }
             
-            var insertResult = yield filingsCol.insertMany(filingData);
-            assert.equal(filingData.length, insertResult.result.n);
-            console.log(`Inserted ${insertResult.result.n} filings for ${tickers[i].Symbol} - ${filing.EntityRegistrantName}`);
+            if(filingData.length > 0) {
+                var insertResult = yield filingsCol.insertMany(filingData);
+                assert.equal(filingData.length, insertResult.result.n);
+                console.log(`Inserted ${insertResult.result.n} filings for ${tickers[i].Symbol} - ${filing.EntityRegistrantName}`);
+            }
+            
+            var updateResult = yield symbolsCol.update({ Symbol: tickers[i].Symbol }, { $set: { lastFilingDataFetchDate: new Date() }});
+            console.log(`Updated ${tickers[i].Symbol} lastFilingDataFetchDate`);
         }
         
         db.close();

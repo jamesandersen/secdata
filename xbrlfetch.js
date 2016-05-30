@@ -70,16 +70,9 @@ function fetchAndParseXBRL(xbrlURL) {
                                     // file entry 
                                     zipfile.openReadStream(entry, function(err, readStream) {
                                           if (err) { reject(err); return; }
-                                          // ensure parent directory exists 
-                                          var filepath = "/tmp/" + entry.fileName;
-                                          readStream.pipe(fs.createWriteStream(filepath));
-                                          readStream.on("end", function() {
-                                                ParseXbrl.parse(filepath).then(function(parsedDoc) {
-                                                      fs.unlink(filepath, function(err) {
-                                                            if (err) { reject(err); return; }
-                                                            resolve(parsedDoc);
-                                                      });
-                                                });
+                                          ParseXbrl.parse(readStream).then(function(parsedDoc) {
+                                                if (err) { reject(err); return; }
+                                                resolve(parsedDoc);
                                           });
                                     });
                               }
